@@ -6,6 +6,7 @@ import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.os.Handler;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.View;
@@ -134,7 +135,7 @@ public class Camera1 extends CameraImpl {
                 }
             }
 
-            mCamera.setParameters(mCameraParameters);
+            updateParametersSafe(mCameraParameters);
         } else {
             mFlash = flash;
         }
@@ -361,13 +362,13 @@ public class Camera1 extends CameraImpl {
                 getCaptureResolution().getHeight()
         );
         int rotation = (calculateCameraRotation(mDisplayOrientation)
-                + (mFacing == CameraKit.Constants.FACING_FRONT ? 180 : 0) ) % 360;
+                + (mFacing == CameraKit.Constants.FACING_FRONT ? 180 : 0)) % 360;
         mCameraParameters.setRotation(rotation);
 
         setFocus(mFocus);
         setFlash(mFlash);
 
-        mCamera.setParameters(mCameraParameters);
+        updateParametersSafe(mCameraParameters);
     }
 
     private TreeSet<AspectRatio> findCommonAspectRatios(List<Camera.Size> previewSizes, List<Camera.Size> captureSizes) {
@@ -447,16 +448,20 @@ public class Camera1 extends CameraImpl {
                 if (event.getAction() == MotionEvent.ACTION_UP) {
                     if (mCamera != null) {
                         Camera.Parameters parameters = mCamera.getParameters();
-                        if (parameters.getMaxNumMeteringAreas() > 0) {
+                        if (parameters.getMaxNumMeteringAreas() > 0 || parameters.getMaxNumFocusAreas() > 0) {
                             Rect rect = calculateFocusArea(event.getX(), event.getY());
 
                             parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
                             List<Camera.Area> meteringAreas = new ArrayList<>();
                             meteringAreas.add(new Camera.Area(rect, getFocusMeteringAreaWeight()));
-                            parameters.setFocusAreas(meteringAreas);
-                            parameters.setMeteringAreas(meteringAreas);
+                            if (parameters.getMaxNumFocusAreas() > 0) {
+                                parameters.setFocusAreas(meteringAreas);
+                            }
+                            if (parameters.getMaxNumMeteringAreas() > 0) {
+                                parameters.setMeteringAreas(meteringAreas);
+                            }
 
-                            mCamera.setParameters(parameters);
+                            updateParametersSafe(parameters);
                             mCamera.autoFocus(new Camera.AutoFocusCallback() {
                                 @Override
                                 public void onAutoFocus(final boolean success, final Camera camera) {
@@ -464,13 +469,13 @@ public class Camera1 extends CameraImpl {
                                     handler.postDelayed(new Runnable() {
                                         @Override
                                         public void run() {
-                                            camera.cancelAutoFocus();
-                                            Camera.Parameters params = camera.getParameters();
+                                            mCamera.cancelAutoFocus();
+                                            Camera.Parameters params = mCamera.getParameters();
                                             if (params.getFocusMode() != Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE) {
                                                 params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
                                                 params.setFocusAreas(null);
                                                 params.setMeteringAreas(null);
-                                                camera.setParameters(params);
+                                                updateParametersSafe(params);
                                             }
 
                                             if (mAutofocusCallback != null) {
@@ -495,6 +500,15 @@ public class Camera1 extends CameraImpl {
                 return true;
             }
         });
+    }
+
+    private void updateParametersSafe(Camera.Parameters parameters){
+        try {
+            mCamera.setParameters(parameters);
+        } catch (Exception ex) {
+            Log.e(Camera1.class.toString(), "Exception setting params", ex);
+            //do nothing
+        }
     }
 
     private Rect calculateFocusArea(float x, float y) {

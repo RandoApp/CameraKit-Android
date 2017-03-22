@@ -122,7 +122,7 @@ public class CameraView extends FrameLayout {
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         if (mAdjustViewBounds) {
             Size previewSize = getPreviewSize();
-            if(previewSize != null) {
+            if (previewSize != null) {
                 if (getLayoutParams().width == LayoutParams.WRAP_CONTENT) {
                     int height = MeasureSpec.getSize(heightMeasureSpec);
                     float ratio = (float) height / (float) previewSize.getWidth();
@@ -142,7 +142,7 @@ public class CameraView extends FrameLayout {
                     );
                     return;
                 }
-            }else{
+            } else {
                 super.onMeasure(widthMeasureSpec, heightMeasureSpec);
                 return;
             }
@@ -154,12 +154,11 @@ public class CameraView extends FrameLayout {
     public void start() {
         int permissionCheck = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.CAMERA);
         if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    mCameraImpl.start();
-                }
-            }).start();
+            try {
+                mCameraImpl.start();
+            } catch (Exception ex) {
+                mCameraImpl.stop();
+            }
         } else {
             requestCameraPermission();
         }
@@ -171,13 +170,7 @@ public class CameraView extends FrameLayout {
 
     public void setFacing(@Facing final int facing) {
         this.mFacing = facing;
-
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                mCameraImpl.setFacing(facing);
-            }
-        }).start();
+        mCameraImpl.setFacing(facing);
     }
 
     public void setFlash(@Flash int flash) {
