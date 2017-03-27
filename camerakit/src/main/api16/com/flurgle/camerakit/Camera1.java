@@ -200,8 +200,12 @@ public class Camera1 extends CameraImpl {
                 mCamera.takePicture(null, null, null, new Camera.PictureCallback() {
                     @Override
                     public void onPictureTaken(byte[] data, Camera camera) {
-                        mCameraListener.onPictureTaken(data);
-                        camera.startPreview();
+                        try {
+                            mCameraListener.onPictureTaken(data);
+                        } catch (Exception e) {
+                            stop();
+                            throw  e;
+                        }
                     }
                 });
                 break;
