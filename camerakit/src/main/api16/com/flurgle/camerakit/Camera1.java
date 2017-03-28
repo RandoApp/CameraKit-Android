@@ -472,17 +472,19 @@ public class Camera1 extends CameraImpl {
                                     handler.postDelayed(new Runnable() {
                                         @Override
                                         public void run() {
-                                            mCamera.cancelAutoFocus();
-                                            Camera.Parameters params = mCamera.getParameters();
-                                            if (params.getFocusMode() != Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE) {
-                                                params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
-                                                params.setFocusAreas(null);
-                                                params.setMeteringAreas(null);
-                                                updateParametersSafe(params);
-                                            }
+                                            if (mCamera != null) {
+                                                mCamera.cancelAutoFocus();
+                                                Camera.Parameters params = mCamera.getParameters();
+                                                if (params.getFocusMode() != Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE) {
+                                                    params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
+                                                    params.setFocusAreas(null);
+                                                    params.setMeteringAreas(null);
+                                                    updateParametersSafe(params);
+                                                }
 
-                                            if (mAutofocusCallback != null) {
-                                                mAutofocusCallback.onAutoFocus(success, camera);
+                                                if (mAutofocusCallback != null) {
+                                                    mAutofocusCallback.onAutoFocus(success, camera);
+                                                }
                                             }
                                         }
                                     }, 5000);
@@ -505,7 +507,7 @@ public class Camera1 extends CameraImpl {
         });
     }
 
-    private void updateParametersSafe(Camera.Parameters parameters){
+    private void updateParametersSafe(Camera.Parameters parameters) {
         try {
             mCamera.setParameters(parameters);
         } catch (Exception ex) {
