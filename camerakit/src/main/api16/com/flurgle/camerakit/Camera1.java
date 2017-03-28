@@ -203,8 +203,7 @@ public class Camera1 extends CameraImpl {
                         try {
                             mCameraListener.onPictureTaken(data);
                         } catch (Exception e) {
-                            stop();
-                            throw  e;
+                            Log.e(getClass().getCanonicalName(), "Exception while taking picture", e);
                         }
                     }
                 });
