@@ -45,6 +45,8 @@ public class Camera1 extends CameraImpl {
 
     private int mDisplayOrientation;
 
+    private final AspectRatio preferedAspectRatio = AspectRatio.of(1,1);
+
     @Facing
     private int mFacing;
 
@@ -251,7 +253,12 @@ public class Camera1 extends CameraImpl {
                     mCameraParameters.getSupportedPreviewSizes(),
                     mCameraParameters.getSupportedPictureSizes()
             );
-            AspectRatio targetRatio = aspectRatios.size() > 0 ? aspectRatios.last() : null;
+            AspectRatio targetRatio;
+            if (aspectRatios.contains(preferedAspectRatio)){
+                targetRatio = preferedAspectRatio;
+            } else {
+                targetRatio = aspectRatios.size() > 0 ? aspectRatios.last() : null;
+            }
 
             Iterator<Size> descendingSizes = sizes.descendingIterator();
             Size size;
@@ -279,7 +286,12 @@ public class Camera1 extends CameraImpl {
                     mCameraParameters.getSupportedPreviewSizes(),
                     mCameraParameters.getSupportedPictureSizes()
             );
-            AspectRatio targetRatio = aspectRatios.size() > 0 ? aspectRatios.last() : null;
+            AspectRatio targetRatio;
+            if (aspectRatios.contains(preferedAspectRatio)){
+                targetRatio = preferedAspectRatio;
+            } else {
+                targetRatio = aspectRatios.size() > 0 ? aspectRatios.last() : null;
+            }
 
             Iterator<Size> descendingSizes = sizes.descendingIterator();
             Size size;
@@ -377,7 +389,7 @@ public class Camera1 extends CameraImpl {
     private TreeSet<AspectRatio> findCommonAspectRatios(List<Camera.Size> previewSizes, List<Camera.Size> captureSizes) {
         Set<AspectRatio> previewAspectRatios = new HashSet<>();
         for (Camera.Size size : previewSizes) {
-            if (size.width >= CameraKit.Internal.screenHeight && size.height >= CameraKit.Internal.screenWidth) {
+            if (size.height >= CameraKit.Internal.screenWidth) {
                 previewAspectRatios.add(AspectRatio.of(size.width, size.height));
             }
         }
