@@ -272,7 +272,7 @@ public class CameraView extends FrameLayout {
         if (activity != null) {
             ActivityCompat.requestPermissions(
                     activity,
-                    new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO},
+                    new String[]{Manifest.permission.CAMERA},
                     CameraKit.Constants.PERMISSION_REQUEST_CAMERA);
         }
     }
