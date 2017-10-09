@@ -1,20 +1,22 @@
 apply plugin: 'com.android.library'
+apply plugin: 'com.novoda.bintray-release'
 
 ext {
-    PUBLISH_GROUP_ID = 'com.flurgle'
+    PUBLISH_GROUP_ID = 'com.wonderkiln'
     PUBLISH_ARTIFACT_ID = 'camerakit'
-    PUBLISH_VERSION = '0.9.15'
+    PUBLISH_VERSION = '0.11.1'
 }
 
 android {
-    compileSdkVersion 25
-    buildToolsVersion "25.0.2"
-
+    compileSdkVersion 26
+    buildToolsVersion '26.0.1'
     defaultConfig {
         minSdkVersion 15
-        targetSdkVersion 25
-        versionCode 1
-        versionName "1.0"
+        targetSdkVersion 26
+        versionName project.ext.PUBLISH_VERSION
+    }
+    lintOptions {
+        abortOnError false
     }
     buildTypes {
         release {
@@ -32,8 +34,21 @@ android {
 }
 
 dependencies {
-    compile 'com.android.support:appcompat-v7:25.2.0'
+    compile 'com.android.support:appcompat-v7:26.1.0'
+    compile 'com.android.support:exifinterface:26.1.0'
+
+    implementation 'android.arch.lifecycle:runtime:1.0.0'
+    implementation 'android.arch.lifecycle:extensions:1.0.0-beta1'
+    annotationProcessor 'android.arch.lifecycle:compiler:1.0.0-beta1'
 }
 
-apply from: 'https://raw.githubusercontent.com/blundell/release-android-library/master/android-release-aar.gradle'
+publish {
+    userOrg = 'wonderkiln'
+    uploadName = 'CameraKit-Android'
+    groupId = project.ext.PUBLISH_GROUP_ID
+    artifactId = project.ext.PUBLISH_ARTIFACT_ID
+    version = project.ext.PUBLISH_VERSION
+    description = ''
+}
 
+//apply from: 'https://raw.githubusercontent.com/blundell/release-android-library/master/android-release-aar.gradle'
