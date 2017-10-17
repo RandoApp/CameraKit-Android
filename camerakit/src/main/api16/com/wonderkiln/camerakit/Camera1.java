@@ -5,13 +5,13 @@ import android.graphics.YuvImage;
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Log;
 import android.view.MotionEvent;
-import android.view.SurfaceHolder;
 import android.view.View;
 
 import java.io.File;
@@ -48,11 +48,11 @@ public class Camera1 extends CameraImpl {
     private Size mVideoSize;
     private Size mPreviewSize;
     private MediaRecorder mMediaRecorder;
-    private File mVideoFile;
     private Camera.AutoFocusCallback mAutofocusCallback;
     private boolean capturingImage = false;
 
     private boolean mShowingPreview;
+    private boolean mRecording;
     private int mDisplayOrientation;
     private int mDeviceOrientation;
 
@@ -73,6 +73,8 @@ public class Camera1 extends CameraImpl {
 
     @VideoQuality
     private int mVideoQuality;
+
+    private int mVideoBitRate;
 
     private Handler mainHandler = new Handler(Looper.getMainLooper());
     private Handler mHandler = new Handler();
@@ -130,6 +132,8 @@ public class Camera1 extends CameraImpl {
             }
         }
         mShowingPreview = false;
+
+        releaseMediaRecorder();
         releaseCamera();
     }
 
@@ -255,6 +259,11 @@ public class Camera1 extends CameraImpl {
     }
 
     @Override
+    void setVideoBitRate(int videoBitRate) {
+        this.mVideoBitRate = videoBitRate;
+    }
+
+    @Override
     void captureImage() {
         switch (mMethod) {
             case METHOD_STANDARD:
@@ -318,25 +327,36 @@ public class Camera1 extends CameraImpl {
     @Override
     void startVideo() {
         synchronized (mCameraLock) {
-            initMediaRecorder();
-            prepareMediaRecorder();
-            mMediaRecorder.start();
+            try {
+                if (prepareMediaRecorder()) {
+                    mMediaRecorder.start();
+                    mRecording = true;
+                } else {
+                    releaseMediaRecorder();
+                }
+            } catch (IOException e) {
+                releaseMediaRecorder();
+            } catch (RuntimeException e) {
+                releaseMediaRecorder();
+            }
         }
     }
 
     @Override
     void endVideo() {
         synchronized (mCameraLock) {
-            try {
-                mMediaRecorder.stop();
-                mCameraListener.onVideoTaken(mVideoFile);
-            } catch (RuntimeException e) {
-                mVideoFile.delete();
-                mCameraListener.onVideoTaken(null);
-            } finally {
-                mMediaRecorder.release();
-                mMediaRecorder = null;
-                mCamera.lock();
+            if (mRecording) {
+                File videoFile = getVideoFile();
+
+                try {
+                    mMediaRecorder.stop();
+                    mCameraListener.onVideoTaken(videoFile);
+                } catch (RuntimeException e) {
+                    videoFile.delete();
+                }
+
+                releaseMediaRecorder();
+                mRecording = false;
             }
 
             stop();
@@ -482,11 +502,7 @@ public class Camera1 extends CameraImpl {
     private void setupPreview() {
         synchronized (mCameraLock) {
             try {
-                if (mPreview.getOutputClass() == SurfaceHolder.class) {
-                    mCamera.setPreviewDisplay(mPreview.getSurfaceHolder());
-                } else {
-                    mCamera.setPreviewTexture(mPreview.getSurfaceTexture());
-                }
+                mCamera.setPreviewDisplay(mPreview.getSurfaceHolder());
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -688,37 +704,67 @@ public class Camera1 extends CameraImpl {
         return output;
     }
 
-    private void initMediaRecorder() {
+    private boolean prepareMediaRecorder() throws IOException {
         synchronized (mCameraLock) {
-            mMediaRecorder = new MediaRecorder();
             mCamera.unlock();
 
+            mMediaRecorder = new MediaRecorder();
             mMediaRecorder.setCamera(mCamera);
 
+            mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
             mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
-            mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.DEFAULT);
 
-            mMediaRecorder.setProfile(getCamcorderProfile(mVideoQuality));
+            CamcorderProfile profile = getCamcorderProfile(mVideoQuality);
+            mMediaRecorder.setProfile(profile);
 
-            mVideoFile = new File(mPreview.getView().getContext().getFilesDir(), "video.mp4");
-            mMediaRecorder.setOutputFile(mVideoFile.getAbsolutePath());
+            File videoFile = getVideoFile();
+            if (videoFile == null) {
+                return false;
+            }
+
+            mMediaRecorder.setOutputFile(videoFile.getPath());
+            mMediaRecorder.setPreviewDisplay(mPreview.getSurface());
             mMediaRecorder.setOrientationHint(calculateCaptureRotation());
 
-            Size videoSize = getVideoResolution();
-            mMediaRecorder.setVideoSize(videoSize.getWidth(), videoSize.getHeight());
-        }
-    }
-
-    private void prepareMediaRecorder() {
-        synchronized (mCameraLock) {
             try {
                 mMediaRecorder.prepare();
             } catch (IllegalStateException e) {
-                e.printStackTrace();
+                releaseMediaRecorder();
+                return false;
             } catch (IOException e) {
-                e.printStackTrace();
+                releaseMediaRecorder();
+                return false;
+            }
+
+            return true;
+        }
+    }
+
+    private void releaseMediaRecorder() {
+        synchronized (mCameraLock) {
+            if (mMediaRecorder != null) {
+                mMediaRecorder.reset();
+                mMediaRecorder.release();
+                mMediaRecorder = null;
+                mCamera.lock();
             }
         }
+    }
+
+    private File getVideoFile() {
+        if (!Environment.getExternalStorageState().equalsIgnoreCase(Environment.MEDIA_MOUNTED)) {
+            return null;
+        }
+
+        File mediaStorageDir = new File(Environment.getExternalStorageDirectory(), "Camera");
+
+        if (!mediaStorageDir.exists()) {
+            if (!mediaStorageDir.mkdirs()) {
+                return null;
+            }
+        }
+
+        return new File(mediaStorageDir.getPath() + File.separator +  "video.mp4");
     }
 
     private CamcorderProfile getCamcorderProfile(@VideoQuality int videoQuality) {
@@ -728,7 +774,7 @@ public class Camera1 extends CameraImpl {
                 if (CamcorderProfile.hasProfile(mCameraId, CamcorderProfile.QUALITY_QVGA)) {
                     camcorderProfile = CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_QVGA);
                 } else {
-                    return getCamcorderProfile(CameraKit.Constants.VIDEO_QUALITY_LOWEST);
+                    camcorderProfile = getCamcorderProfile(CameraKit.Constants.VIDEO_QUALITY_LOWEST);
                 }
                 break;
 
@@ -736,7 +782,7 @@ public class Camera1 extends CameraImpl {
                 if (CamcorderProfile.hasProfile(mCameraId, CamcorderProfile.QUALITY_480P)) {
                     camcorderProfile = CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_480P);
                 } else {
-                    return getCamcorderProfile(CameraKit.Constants.VIDEO_QUALITY_QVGA);
+                    camcorderProfile = getCamcorderProfile(CameraKit.Constants.VIDEO_QUALITY_QVGA);
                 }
                 break;
 
@@ -744,7 +790,7 @@ public class Camera1 extends CameraImpl {
                 if (CamcorderProfile.hasProfile(mCameraId, CamcorderProfile.QUALITY_720P)) {
                     camcorderProfile = CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_720P);
                 } else {
-                    return getCamcorderProfile(CameraKit.Constants.VIDEO_QUALITY_480P);
+                    camcorderProfile = getCamcorderProfile(CameraKit.Constants.VIDEO_QUALITY_480P);
                 }
                 break;
 
@@ -752,7 +798,7 @@ public class Camera1 extends CameraImpl {
                 if (CamcorderProfile.hasProfile(mCameraId, CamcorderProfile.QUALITY_1080P)) {
                     camcorderProfile = CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_1080P);
                 } else {
-                    return getCamcorderProfile(CameraKit.Constants.VIDEO_QUALITY_720P);
+                    camcorderProfile = getCamcorderProfile(CameraKit.Constants.VIDEO_QUALITY_720P);
                 }
                 break;
 
@@ -760,7 +806,7 @@ public class Camera1 extends CameraImpl {
                 try {
                     camcorderProfile = CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_2160P);
                 } catch (Exception e) {
-                    return getCamcorderProfile(CameraKit.Constants.VIDEO_QUALITY_HIGHEST);
+                    camcorderProfile = getCamcorderProfile(CameraKit.Constants.VIDEO_QUALITY_HIGHEST);
                 }
                 break;
 
@@ -771,6 +817,10 @@ public class Camera1 extends CameraImpl {
             case CameraKit.Constants.VIDEO_QUALITY_LOWEST:
                 camcorderProfile = CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_LOW);
                 break;
+        }
+
+        if (camcorderProfile != null && mVideoBitRate != 0) {
+            camcorderProfile.videoBitRate = mVideoBitRate;
         }
 
         return camcorderProfile;

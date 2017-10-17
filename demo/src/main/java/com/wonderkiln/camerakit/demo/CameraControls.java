@@ -16,7 +16,6 @@ import android.view.View;
 import android.view.animation.OvershootInterpolator;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.Toast;
 
 import com.wonderkiln.camerakit.CameraKit;
 import com.wonderkiln.camerakit.CameraListener;
@@ -131,9 +130,11 @@ public class CameraControls extends LinearLayout {
                         public void onVideoTaken(File video) {
                             super.onVideoTaken(video);
                             if (video != null) {
-                                Toast.makeText(getContext(), video.getAbsolutePath(), Toast.LENGTH_SHORT).show();
-                            } else {
-                                Toast.makeText(getContext(), "failed", Toast.LENGTH_SHORT).show();
+                                ResultHolder.dispose();
+                                ResultHolder.setVideo(video);
+                                ResultHolder.setNativeCaptureSize(cameraView.getCaptureSize());
+                                Intent intent = new Intent(getContext(), PreviewActivity.class);
+                                getContext().startActivity(intent);
                             }
                         }
                     });
@@ -148,11 +149,6 @@ public class CameraControls extends LinearLayout {
                             Bitmap bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.length);
                             ResultHolder.dispose();
                             ResultHolder.setImage(bitmap);
-//                        ResultHolder.setNativeCaptureSize(
-//                                captureModeRadioGroup.getCheckedRadioButtonId() == R.id.modeCaptureStandard ?
-//                                        camera.getCaptureSize() : camera.getPreviewSize()
-//                        );
-
                             ResultHolder.setNativeCaptureSize(cameraView.getCaptureSize());
                             ResultHolder.setTimeToCallback(callbackTime - startTime);
                             Intent intent = new Intent(getContext(), PreviewActivity.class);
@@ -217,10 +213,12 @@ public class CameraControls extends LinearLayout {
         handleViewTouchFeedback(view, motionEvent);
         switch (motionEvent.getAction()) {
             case MotionEvent.ACTION_UP: {
-                if (true) {
-                    changeViewImageResource((ImageView) view, R.drawable.ic_flash_off);
-                } else {
+                if (cameraView.getFlash() == CameraKit.Constants.FLASH_OFF) {
+                    cameraView.setFlash(CameraKit.Constants.FLASH_ON);
                     changeViewImageResource((ImageView) view, R.drawable.ic_flash_on);
+                } else {
+                    cameraView.setFlash(CameraKit.Constants.FLASH_OFF);
+                    changeViewImageResource((ImageView) view, R.drawable.ic_flash_off);
                 }
 
                 break;
@@ -266,6 +264,7 @@ public class CameraControls extends LinearLayout {
     }
 
     void changeViewImageResource(final ImageView imageView, @DrawableRes final int resId) {
+        imageView.setRotation(0);
         imageView.animate()
                 .rotationBy(360)
                 .setDuration(400)

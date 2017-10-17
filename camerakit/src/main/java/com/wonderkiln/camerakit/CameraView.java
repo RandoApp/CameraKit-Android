@@ -32,6 +32,7 @@ import android.widget.FrameLayout;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,7 +42,6 @@ import static com.wonderkiln.camerakit.CameraKit.Constants.FLASH_AUTO;
 import static com.wonderkiln.camerakit.CameraKit.Constants.FLASH_OFF;
 import static com.wonderkiln.camerakit.CameraKit.Constants.FLASH_ON;
 import static com.wonderkiln.camerakit.CameraKit.Constants.FLASH_TORCH;
-import static com.wonderkiln.camerakit.CameraKit.Constants.METHOD_STANDARD;
 import static com.wonderkiln.camerakit.CameraKit.Constants.PERMISSIONS_LAZY;
 import static com.wonderkiln.camerakit.CameraKit.Constants.PERMISSIONS_PICTURE;
 import static com.wonderkiln.camerakit.CameraKit.Constants.PERMISSIONS_STRICT;
@@ -94,6 +94,7 @@ public class CameraView extends FrameLayout implements LifecycleObserver {
     @VideoQuality
     private int mVideoQuality;
     private int mJpegQuality;
+    private int mVideoBitRate;
     private boolean mCropOutput;
 
     private boolean mAdjustViewBounds;
@@ -136,6 +137,7 @@ public class CameraView extends FrameLayout implements LifecycleObserver {
                 mVideoQuality = a.getInteger(com.wonderkiln.camerakit.R.styleable.CameraView_ckVideoQuality, CameraKit.Defaults.DEFAULT_VIDEO_QUALITY);
                 mJpegQuality = a.getInteger(com.wonderkiln.camerakit.R.styleable.CameraView_ckJpegQuality, CameraKit.Defaults.DEFAULT_JPEG_QUALITY);
                 mCropOutput = a.getBoolean(com.wonderkiln.camerakit.R.styleable.CameraView_ckCropOutput, CameraKit.Defaults.DEFAULT_CROP_OUTPUT);
+                mVideoBitRate = a.getInteger(R.styleable.CameraView_ckVideoBitRate, CameraKit.Defaults.DEFAULT_VIDEO_BIT_RATE);
                 mAdjustViewBounds = a.getBoolean(com.wonderkiln.camerakit.R.styleable.CameraView_android_adjustViewBounds, CameraKit.Defaults.DEFAULT_ADJUST_VIEW_BOUNDS);
             } finally {
                 a.recycle();
@@ -163,6 +165,7 @@ public class CameraView extends FrameLayout implements LifecycleObserver {
         setZoom(mZoom);
         setPermissions(mPermissions);
         setVideoQuality(mVideoQuality);
+        setVideoBitRate(mVideoBitRate);
 
         if (!isInEditMode()) {
             mDisplayOrientationDetector = new DisplayOrientationDetector(context) {
@@ -197,7 +200,7 @@ public class CameraView extends FrameLayout implements LifecycleObserver {
         if (!isInEditMode()) {
             mDisplayOrientationDetector.enable(
                     ViewCompat.isAttachedToWindow(this)
-                            ? DisplayManagerCompat.getInstance(getContext())
+                            ? DisplayManagerCompat.getInstance(getContext().getApplicationContext())
                             .getDisplay(Display.DEFAULT_DISPLAY)
                             : null
             );
@@ -391,6 +394,11 @@ public class CameraView extends FrameLayout implements LifecycleObserver {
         mCameraImpl.setVideoQuality(mVideoQuality);
     }
 
+    public void setVideoBitRate(int videoBirRate) {
+        this.mVideoBitRate = videoBirRate;
+        mCameraImpl.setVideoBitRate(mVideoBitRate);
+    }
+
     public void setJpegQuality(int jpegQuality) {
         this.mJpegQuality = jpegQuality;
     }
@@ -508,15 +516,16 @@ public class CameraView extends FrameLayout implements LifecycleObserver {
             // Handle cameras that don't give us the correctly rotated/mirrored image, but instead just set the corresponding EXIF data.
             // Exif data is lost when we do a BitmapFactory.decodeByteArray, so need to correct image here.
             if (ExifUtil.getExifOrientation(jpeg) != ExifInterface.ORIENTATION_NORMAL || mFacing == FACING_FRONT) {
-                Bitmap bitmap = ExifUtil.decodeBitmapWithRotation(jpeg, mFacing == FACING_FRONT);
-                ByteArrayOutputStream stream = new ByteArrayOutputStream();
-                bitmap.compress(Bitmap.CompressFormat.JPEG, mJpegQuality, stream);
-                jpeg = stream.toByteArray();
+                try {
+                    Bitmap bitmap = ExifUtil.decodeBitmapWithRotation(jpeg, mFacing == FACING_FRONT);
+                    ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream);
+                    jpeg = stream.toByteArray();
+                } catch (IOException e) {
+                }
             }
 
             if (mCropOutput) {
-                int width = mMethod == METHOD_STANDARD ? mCameraImpl.getCaptureResolution().getWidth() : mCameraImpl.getPreviewResolution().getWidth();
-                int height = mMethod == METHOD_STANDARD ? mCameraImpl.getCaptureResolution().getHeight() : mCameraImpl.getPreviewResolution().getHeight();
                 AspectRatio outputRatio = AspectRatio.of(getWidth(), getHeight());
                 getCameraListener().onPictureTaken(new CenterCrop(jpeg, outputRatio, mJpegQuality).getJpeg());
             } else {
