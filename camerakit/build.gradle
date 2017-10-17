@@ -1,20 +1,24 @@
 apply plugin: 'com.android.library'
 
-ext {
-    PUBLISH_GROUP_ID = 'com.flurgle'
-    PUBLISH_ARTIFACT_ID = 'camerakit'
-    PUBLISH_VERSION = '0.9.15'
+def ver = '0.11.3-Snapshot'
+
+def isSnapshot(version) {
+    return version.contains('-Snapshot') || System.getenv('CIRCLE_TAG') == null || System.getenv('CIRCLE_TAG').length() == 0
 }
 
-android {
-    compileSdkVersion 25
-    buildToolsVersion "25.0.2"
+group = 'com.wonderkiln'
+version = ver
 
+android {
+    compileSdkVersion 26
+    buildToolsVersion '26.0.1'
     defaultConfig {
         minSdkVersion 15
-        targetSdkVersion 25
-        versionCode 1
-        versionName "1.0"
+        targetSdkVersion 26
+        versionName ver
+    }
+    lintOptions {
+        abortOnError false
     }
     buildTypes {
         release {
@@ -32,8 +36,38 @@ android {
 }
 
 dependencies {
-    compile 'com.android.support:appcompat-v7:25.2.0'
+    compile 'com.android.support:appcompat-v7:26.1.0'
+    compile 'com.android.support:exifinterface:26.1.0'
+
+    implementation 'android.arch.lifecycle:runtime:1.0.0'
+    implementation 'android.arch.lifecycle:extensions:1.0.0-beta1'
+    annotationProcessor 'android.arch.lifecycle:compiler:1.0.0-beta1'
 }
 
-apply from: 'https://raw.githubusercontent.com/blundell/release-android-library/master/android-release-aar.gradle'
+install {
+    repositories.mavenInstaller {
+        pom.project {
+            name 'CameraKit-Android'
+            packaging 'aar'
+        }
+    }
+}
 
+bintray {
+    user = System.getenv('BINTRAY_USER')
+    key = System.getenv('BINTRAY_KEY')
+    override = isSnapshot(ver)
+    publish = true
+    configurations = ['archives']
+    pkg {
+        repo = isSnapshot(ver) ? 'snapshots' : 'maven'
+        name = 'CameraKit-Android'
+        userOrg = 'wonderkiln'
+        vcsUrl = 'https://github.com/wonderkiln/CameraKit-Android.git'
+        version {
+            name = ver
+            vcsTag = ver
+            released = new Date()
+        }
+    }
+}
